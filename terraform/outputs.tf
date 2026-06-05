@@ -8,6 +8,11 @@ output "ansible_master_public_ip" {
   description = "IP publique de l'Ansible master"
 }
 
+output "ansible_master_private_ip" {
+  value       = module.compute.ansible_master_private_ip
+  description = "IP privée de l'Ansible master"
+}
+
 output "web_private_ip" {
   value       = module.compute.web_private_ip
   description = "IP privée du serveur web"
