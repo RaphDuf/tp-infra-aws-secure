@@ -55,7 +55,7 @@ resource "local_file" "ansible_inventory" {
     bastion_ip   = module.compute.bastion_public_ip
     web_ip       = module.compute.web_private_ip
     ftp_ip       = module.compute.ftp_private_ip
-    ssh_key_path = "${path.root}/${var.project}-key.pem"
+    ssh_key_path = "./tp-finale-key.pem"
   })
   filename = "${path.root}/../ansible/inventory.ini"
 }
