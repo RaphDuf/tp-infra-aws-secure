@@ -15,3 +15,8 @@ variable "my_ip" {
   type        = string
   # a renseigner dans terraform.tfvars, ex : "203.0.113.10/32"
 }
+
+variable "admin_ip" {
+  description = "Votre IP publique en /32 (acces SSH au bastion et Ansible Master)"
+  type        = string
+}
