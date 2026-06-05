@@ -1,0 +1,116 @@
+---
+# =============================================================
+# HARDENING — durcissement commun à toutes les machines
+# Appliqué sur : web, ftp (et bastion si souhaité)
+# =============================================================
+
+# --- 1. Mises à jour de sécurité automatiques ---
+# dnf-automatic applique les patches de sécurité chaque nuit
+# sans intervention manuelle. Justification : une CVE critique
+# publiée un week-end est patchée sans action humaine.
+- name: Installer dnf-automatic
+  ansible.builtin.dnf:
+    name: dnf-automatic
+    state: present
+
+- name: Configurer dnf-automatic (sécurité uniquement)
+  ansible.builtin.template:
+    src: dnf-automatic.conf.j2
+    dest: /etc/dnf/automatic.conf
+    owner: root
+    group: root
+    mode: "0644"
+  notify: restart dnf-automatic
+
+- name: Activer et démarrer dnf-automatic.timer
+  ansible.builtin.systemd:
+    name: dnf-automatic.timer
+    enabled: true
+    state: started
+
+# --- 2. Durcissement SSH ---
+# Désactiver root + forcer l'auth par clé uniquement.
+# Justification : root SSH = accès direct sans traçabilité.
+# La clé SSH est bien plus résistante au brute-force qu'un mot de passe.
+- name: Désactiver le login SSH en tant que root
+  ansible.builtin.lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: "^#?PermitRootLogin"
+    line: "PermitRootLogin no"
+    validate: /usr/sbin/sshd -t -f %s
+  notify: restart sshd
+
+- name: Désactiver l'authentification par mot de passe
+  ansible.builtin.lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: "^#?PasswordAuthentication"
+    line: "PasswordAuthentication no"
+    validate: /usr/sbin/sshd -t -f %s
+  notify: restart sshd
+
+- name: Désactiver le forwarding X11 (inutile sur serveur)
+  ansible.builtin.lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: "^#?X11Forwarding"
+    line: "X11Forwarding no"
+    validate: /usr/sbin/sshd -t -f %s
+  notify: restart sshd
+
+- name: Limiter SSH aux utilisateurs autorisés
+  ansible.builtin.lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: "^#?AllowUsers"
+    line: "AllowUsers ec2-user"
+    validate: /usr/sbin/sshd -t -f %s
+  notify: restart sshd
+
+# --- 3. Pare-feu hôte (firewalld) ---
+# Deuxième couche de défense après les Security Groups AWS.
+# Justification : défense en profondeur — si un SG est mal
+# configuré, firewalld bloque quand même le trafic non autorisé.
+- name: Installer firewalld
+  ansible.builtin.dnf:
+    name: firewalld
+    state: present
+
+- name: Activer et démarrer firewalld
+  ansible.builtin.systemd:
+    name: firewalld
+    enabled: true
+    state: started
+
+- name: Bloquer tout le trafic entrant par défaut (zone drop)
+  ansible.posix.firewalld:
+    zone: drop
+    state: enabled
+    permanent: true
+    immediate: true
+
+- name: Autoriser SSH dans la zone publique
+  ansible.posix.firewalld:
+    service: ssh
+    zone: public
+    state: enabled
+    permanent: true
+    immediate: true
+
+# --- 4. Bannière de connexion ---
+# Bonne pratique légale : avertit que l'accès est surveillé.
+- name: Configurer la bannière SSH
+  ansible.builtin.copy:
+    dest: /etc/issue.net
+    content: |
+      ******************************************************************
+      *  Accès réservé aux personnes autorisées. Toute connexion est   *
+      *  enregistrée et surveillée. Déconnectez-vous si non autorisé.  *
+      ******************************************************************
+    owner: root
+    mode: "0644"
+
+- name: Activer la bannière dans sshd_config
+  ansible.builtin.lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: "^#?Banner"
+    line: "Banner /etc/issue.net"
+    validate: /usr/sbin/sshd -t -f %s
+  notify: restart sshd
