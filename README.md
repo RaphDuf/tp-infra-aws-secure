@@ -72,6 +72,8 @@ projet-final/
   ftp_password: "Gr0upS1xFTP!"
   ```
 
+> **Attention secrets** : Le fichier `ansible/group_vars/ftp.yml` contient le mot de passe FTP en clair. Il est ainsi ajouté au `.gitignore`. Cela évite d'exposer les secrets dans l'historique Git. En production, on utiliserait Ansible Vault ou un gestionnaire de secrets (AWS Secrets Manager, HashiCorp Vault, etc.).
+
 ---
 
 ## 4. Déploiement
@@ -103,6 +105,15 @@ make destroy
 Cette commande détruit l'infrastructure Terraform et supprime les fichiers générés (`ansible/inventory.ini`, clé SSH copiée).
 
 > Important : vérifiez dans la console AWS qu'il ne reste aucun VPC, NAT Gateway, Elastic IP ou EC2, puis cliquez sur **End Lab**.
+
+### 4.4 Idempotence
+
+Terraform et Ansible sont **idempotents** : vous pouvez exécuter les mêmes commandes plusieurs fois sans effet secondaire indésirable.
+
+- **Terraform** : `terraform apply` détecte l'état actuel des ressources AWS. S'il n'y a pas de changement dans le code Terraform, aucune ressource n'est modifiée.
+- **Ansible** : Les playbooks Ansible déclarent l'état souhaité des serveurs. Si une tâche (ex: "Installer nginx") est déjà appliquée, elle ne s'exécute pas à nouveau.
+
+Cette propriété est très utile : vous pouvez relancer `make deploy` plusieurs fois si le déploiement échoue partiellement, sans duplicata de ressources. 
 
 ---
 
