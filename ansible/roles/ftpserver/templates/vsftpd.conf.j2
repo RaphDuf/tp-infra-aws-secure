@@ -1,43 +1,28 @@
-# =============================================================
 # Configuration vsftpd — mode passif, utilisateur local uniquement
-# Généré par Ansible — ne pas modifier manuellement
-# =============================================================
+# Genere par Ansible — ne pas modifier manuellement
 
-# --- Accès ---
-anonymous_enable=NO          # Pas d'accès anonyme
-local_enable=YES             # Autoriser les utilisateurs locaux
-write_enable=YES             # Autoriser l'écriture
+anonymous_enable=NO
+local_enable=YES
+write_enable=YES
 local_umask=022
 
-# --- Restriction au dossier personnel (chroot) ---
-# Justification : sans chroot, ftpuser pourrait naviguer dans
-# tout le système de fichiers. Avec chroot, il est enfermé
-# dans /srv/ftp — il ne voit que son dossier partagé.
 chroot_local_user=YES
 allow_writeable_chroot=YES
 local_root=/srv/ftp
 
-# --- Liste blanche utilisateurs ---
 userlist_enable=YES
-userlist_deny=NO             # NO = seuls les users listés sont autorisés
+userlist_deny=NO
 userlist_file=/etc/vsftpd/user_list
 
-# --- Mode passif ---
-# Justification : le mode passif est compatible avec les firewalls
-# et les Security Groups AWS. Le client initie TOUTES les connexions.
 pasv_enable=YES
 pasv_min_port={{ ftp_pasv_min | default(50000) }}
 pasv_max_port={{ ftp_pasv_max | default(51000) }}
-# IP publique du serveur FTP pour les réponses PASV
-# (adresse IP privée suffisante ici car accès via tunnel bastion)
 pasv_address={{ ansible_host }}
 
-# --- Sécurité ---
 ftpd_banner=Serveur FTP prive - Acces restreint
-xferlog_enable=YES           # Logger tous les transferts
+xferlog_enable=YES
 xferlog_file=/var/log/vsftpd.log
-log_ftp_protocol=YES         # Logger les commandes FTP
+log_ftp_protocol=YES
 
-# --- Timeouts ---
 idle_session_timeout=300
 data_connection_timeout=120
