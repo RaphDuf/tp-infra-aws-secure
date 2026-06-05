@@ -1,6 +1,6 @@
 # Projet final - Architecture AWS automatisee & securisee (Terraform + Ansible)
 
-Equipe : .......................................................
+Equipe : Axel Malka, Matheo Harison, Ambrine Zaouche, Raphael Duflot
 
 ## 1. Contexte
 Votre equipe (4-5) joue le role d'une equipe DevSecOps en entreprise. Mission : concevoir
