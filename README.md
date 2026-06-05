@@ -6,35 +6,44 @@
 
 ## 1. Contexte
 
-Notre équipe joue le rôle d'une équipe DevSecOps en entreprise. Mission : concevoir et déployer une **infrastructure AWS sécurisée et 100% automatisée** : un bastion + un Ansible master, un serveur web privé (nginx), un serveur FTP privé (vsftpd), le tout durci par Ansible.
+Notre équipe joue le rôle d'une équipe DevSecOps en entreprise. Mission : concevoir, déployer et durcir une **infrastructure AWS sécurisée et 100% automatisée** avec Terraform et Ansible.
+
+Le projet met en place :
+- un **bastion** public pour l'accès SSH,
+- un **Ansible master** public pour l'orchestration,
+- un **serveur web privé** (`nginx`) sans IP publique,
+- un **serveur FTP privé** (`vsftpd`) sans IP publique,
+- des **best practices de sécurité** : Security Groups, NACL, hardening SSH, firewall hôte et mises à jour automatiques.
 
 ---
 
-## 2. Ce que contient ce dépôt
+## 2. Structure du dépôt
 
 ```
 projet-final/
 |-- README.md                   ce fichier
 |-- .gitignore                  exclut *.pem, terraform.tfstate, .terraform/
-|-- Makefile                    make deploy / make destroy
+|-- Makefile                    make deploy / make destroy / make ping
 |-- terraform/
-|   |-- provider.tf             aws ~>6, tls, local
-|   |-- variables.tf            region, project, admin_ip
-|   |-- main.tf                 point d'entrée — appelle les modules
-|   |-- outputs.tf              IPs utiles après apply
-|   |-- terraform.tfvars        votre IP publique (non commité)
+|   |-- provider.tf             provider AWS + TLS + local
+|   |-- variables.tf            variables Terraform
+|   |-- main.tf                 point d'entrée — modules réseau, sécurité, compute
+|   |-- outputs.tf              sorties Terraform utiles après apply
+|   |-- terraform.tfvars        paramètres locaux (admin_ip, project)
 |   `-- modules/
 |       |-- network/            VPC, subnets public/privés, IGW, NAT Gateway, routes
-|       |-- security/           Security Groups least-privilege + NACL subnet privé
+|       |-- security/           Security Groups + NACL subnet privé
 |       `-- compute/            EC2 bastion, Ansible master, web, FTP + clés SSH
 `-- ansible/
     |-- ansible.cfg
-    |-- site.yml                playbook principal (web + ftp + hardening)
+    |-- site.yml                playbook principal (hardening, web, ftp)
     |-- inventory.tftpl         inventaire généré par Terraform
+    |-- group_vars/
+    |   `-- ftp.yml              mot de passe FTP et variables Ansible
     `-- roles/
         |-- webserver/          installe et configure nginx
         |-- ftpserver/          installe et configure vsftpd
-        `-- hardening/          durcissement SSH, firewall hôte, mises à jour auto
+        `-- hardening/          durcissement SSH, firewall et mises à jour auto
 ```
 
 ---
@@ -54,41 +63,59 @@ projet-final/
   project  = "devsecops"
   ```
 
+### 3.2 Configuration Ansible
+
+- L'inventaire Ansible est généré automatiquement par Terraform dans `ansible/inventory.ini`.
+- La clé privée SSH est créée par Terraform dans `terraform/tp-finale-key.pem`, puis copiée dans `ansible/tp-finale-key.pem` par `make deploy`.
+- Le mot de passe FTP est défini dans `ansible/group_vars/ftp.yml` :
+  ```yaml
+  ftp_password: "Gr0upS1xFTP!"
+  ```
+
 ---
 
 ## 4. Déploiement
 
-Le déploiement complet se fait en deux étapes : Terraform crée l'infrastructure, puis Ansible configure et durcit les serveurs.
+### 4.1 Commande recommandée
 
 ```bash
-# 1. Cloner le dépôt et se placer à la racine
-git clone <url-du-repo> && cd projet-final
-
-# 2. Déploiement complet (infrastructure + configuration)
 make deploy
+```
 
-# 3. Destruction propre en fin de séance (OBLIGATOIRE — NAT Gateway facturée)
+`make deploy` exécute :
+1. Terraform (`init` + `apply`) dans `terraform/`
+2. copie de la clé SSH vers `ansible/`
+3. Ansible (`ansible-playbook -i inventory.ini site.yml`) dans `ansible/`
+4. affichage des commandes de connexion SSH/tunnels utiles.
+
+### 4.2 Vérifier la connectivité
+
+```bash
+make ping
+```
+
+### 4.3 Destruction et nettoyage
+
+```bash
 make destroy
 ```
 
-**Détail des commandes `make` :**
+Cette commande détruit l'infrastructure Terraform et supprime les fichiers générés (`ansible/inventory.ini`, clé SSH copiée).
 
-```bash
-# Équivalent make deploy :
-cd terraform && terraform init && terraform apply -auto-approve
-cd ../ansible && ansible-playbook site.yml -i inventory.ini
-
-# Équivalent make destroy :
-cd terraform && terraform destroy -auto-approve
-```
-
-> ⚠️ Vérifiez après `terraform destroy` : aucune EC2, NAT Gateway, ni VPC résiduel dans la console. Puis cliquez **End Lab**.
+> Important : vérifiez dans la console AWS qu'il ne reste aucun VPC, NAT Gateway, Elastic IP ou EC2, puis cliquez sur **End Lab**.
 
 ---
 
 ## 5. Choix d'architecture & justifications
 
-### 5.1 Réseau (`modules/network`)
+### 5.1 Modules Terraform
+
+- `terraform/modules/network` : VPC, subnets, IGW, NAT Gateway, tables de routage.
+- `terraform/modules/security` : Security Groups et NACL pour le subnet privé.
+- `terraform/modules/compute` : génération de la paire SSH et création des instances EC2.
+- `terraform/main.tf` : assemble les modules et génère l'inventaire Ansible.
+
+### 5.2 Réseau (`modules/network`)
 
 | Ressource | CIDR | AZ | Rôle |
 |---|---|---|---|
@@ -109,7 +136,8 @@ Choix économique justifié par les contraintes Academy : la NAT est facturée �
 **CIDRs non contigus (`10.0.1.x` vs `10.0.10.x`)**
 L'espacement entre les plages publique et privée rend les règles de firewall immédiatement lisibles : toute règle ciblant `10.0.10.0/24` désigne sans ambiguïté un subnet privé.
 
-### 5.2 Sécurité (`modules/security`)
+
+### 5.3 Sécurité (`modules/security`)
 
 **Security Groups — référencement par ID de SG**
 
@@ -142,9 +170,58 @@ Les Security Groups sont *stateful* (la réponse rentre automatiquement si la re
 
 Les **ports éphémères (1024–65535) en entrée** sont nécessaires car la NACL étant stateless, les réponses aux requêtes `dnf update` sortantes reviennent sur un port aléatoire dans cette plage. Sans cette règle, les mises à jour échoueraient silencieusement.
 
+
+### 5.4 Compute (`modules/compute`)
+
+Le module `terraform/modules/compute` crée les instances EC2 et la paire SSH utilisée par Ansible :
+- `tls_private_key` génère une clé RSA 4096 bits.
+- `aws_key_pair` enregistre la clé publique sur AWS.
+- `local_file` écrit la clé privée dans `terraform/tp-finale-key.pem`.
+- `data.aws_ami.amazon_linux_2023` récupère l'AMI Amazon Linux 2023 la plus récente.
+- `aws_instance.bastion` : bastion public dans le subnet public.
+- `aws_instance.ansible_master` : Ansible master public dans le subnet public.
+- `aws_instance.web` : serveur web privé dans le subnet privé A.
+- `aws_instance.ftp` : serveur FTP privé dans le subnet privé B.
+
+Chaque instance utilise le profil IAM `LabInstanceProfile` imposé par AWS Academy. Le bastion et l'Ansible master ont des adresses publiques, alors que le web et le FTP restent accessibles uniquement via le bastion / tunnel SSH.
+
 ---
 
-## 6. Nettoyage
+## 6. Ansible
+
+### 6.1 Playbook principal
+
+`ansible/site.yml` exécute :
+- `hardening` puis `webserver` sur le serveur web,
+- `hardening` puis `ftpserver` sur le serveur FTP.
+
+### 6.2 Rôles
+
+- `roles/webserver` : installe et démarre `nginx`.
+- `roles/ftpserver` : installe `vsftpd`, crée `ftpuser`, configure le partage et la plage passive, active le firewall local.
+- `roles/hardening` : durcit SSH, configure `firewalld` et active les mises à jour automatiques.
+
+### 6.3 Inventaire
+
+L'inventaire `ansible/inventory.ini` est généré automatiquement par Terraform depuis `ansible/inventory.tftpl`.
+
+Il contient les hôtes `bastion`, `web`, `ftp` et le groupe `private` pour la connexion via bastion.
+
+---
+
+## 7. Sorties Terraform
+
+Terraform fournit les sorties suivantes :
+- `bastion_public_ip`
+- `ansible_master_public_ip`
+- `web_private_ip`
+- `ftp_private_ip`
+- `ssh_key_path`
+- commandes SSH recommandées pour se connecter au bastion et à l'Ansible master.
+
+---
+
+## 8. Nettoyage
 
 ```bash
 make destroy
