@@ -58,7 +58,6 @@
     owner: ftpuser
     group: ftpgroup
     mode: "0640"
-    update_password: on_create
 
 
 # --- 4. Configuration vsftpd ---
