@@ -12,7 +12,7 @@ resource "aws_security_group" "bastion" {
   vpc_id      = var.vpc_id
 
   ingress {
-    description = "SSH depuis l'IP admin uniquement"
+    description = "SSH depuis IP admin uniquement"
     from_port   = 22
     to_port     = 22
     protocol    = "tcp"
@@ -20,7 +20,7 @@ resource "aws_security_group" "bastion" {
   }
 
   egress {
-    description = "Tout le trafic sortant autorisé"
+    description = "Tout le trafic sortant autorise"
     from_port   = 0
     to_port     = 0
     protocol    = "-1"
@@ -99,7 +99,7 @@ resource "aws_security_group" "web" {
   }
 
   egress {
-    description = "Sortie pour mises à jour via NAT"
+    description = "Sortie pour mises a jour via NAT"
     from_port   = 0
     to_port     = 0
     protocol    = "-1"
@@ -150,7 +150,7 @@ resource "aws_security_group" "ftp" {
   }
 
   ingress {
-    description     = "FTP passif (plage données) depuis bastion"
+    description     = "FTP passif (plage donnees) depuis bastion"
     from_port       = 50000
     to_port         = 51000
     protocol        = "tcp"
@@ -158,7 +158,7 @@ resource "aws_security_group" "ftp" {
   }
 
   egress {
-    description = "Sortie pour mises à jour via NAT"
+    description = "Sortie pour mises a jour via NAT"
     from_port   = 0
     to_port     = 0
     protocol    = "-1"
