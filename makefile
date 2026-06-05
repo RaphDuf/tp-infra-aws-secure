@@ -42,7 +42,7 @@ show-info:
 	@echo "  ssh -i $(ANSIBLE_DIR)/$(KEY_NAME) ec2-user@$$(cd $(TERRAFORM_DIR) && terraform output -raw bastion_public_ip)"
 	@echo ""
 	@echo "Ansible Master :"
-	@echo "  ssh -i $(ANSIBLE_DIR)/$(KEY_NAME) -o ProxyCommand=\"ssh -i $(ANSIBLE_DIR)/$(KEY_NAME) -o StrictHostKeyChecking=no -W %h:%p ec2-user@$$(cd $(TERRAFORM_DIR) && terraform output -raw bastion_public_ip)\" ec2-user@$$(cd $(TERRAFORM_DIR) && terraform output -raw ansible_master_public_ip)"
+	@echo "  ssh -i $(ANSIBLE_DIR)/$(KEY_NAME) -o ProxyCommand=\"ssh -i $(ANSIBLE_DIR)/$(KEY_NAME) -o StrictHostKeyChecking=no -W %h:%p ec2-user@$$(cd $(TERRAFORM_DIR) && terraform output -raw bastion_public_ip)\" ec2-user@$$(cd $(TERRAFORM_DIR) && terraform output -raw ansible_master_private_ip)"
 	@echo ""
 	@echo "Serveur Web (tunnel nginx) :"
 	@echo "  ssh -i $(ANSIBLE_DIR)/$(KEY_NAME) -o ProxyCommand=\"ssh -i $(ANSIBLE_DIR)/$(KEY_NAME) -o StrictHostKeyChecking=no -W %h:%p ec2-user@$$(cd $(TERRAFORM_DIR) && terraform output -raw bastion_public_ip)\" -L 8080:localhost:80 ec2-user@$$(cd $(TERRAFORM_DIR) && terraform output -raw web_private_ip)"

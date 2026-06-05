@@ -30,5 +30,5 @@ output "ssh_bastion_command" {
 
 output "ssh_ansible_master_command" {
   description = "Commande pour se connecter à l'Ansible Master (via rebond)"
-  value       = "ssh -i ./${var.project}-key.pem -J ec2-user@${module.compute.bastion_public_ip} ec2-user@${module.compute.ansible_master_public_ip}"
+  value       = "ssh -i ./${var.project}-key.pem -o ProxyCommand=\"ssh -W %h:%p -i ./${var.project}-key.pem ec2-user@${module.compute.bastion_public_ip}\" ec2-user@${module.compute.ansible_master_private_ip}"
 }
