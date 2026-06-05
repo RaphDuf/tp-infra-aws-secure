@@ -1,4 +1,4 @@
 project = "tp-finale"
 # Votre IP publique (https://whatismyip.com) en /32 :
-my_ip    = "86.229.41.91"
-admin_ip = "86.229.41.91"
+my_ip   = "81.65.160.204/32"
+admin_ip = "81.65.160.204/32"
