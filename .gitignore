@@ -1,0 +1,10 @@
+# Terraform
+**/.terraform/*
+*.tfstate
+*.tfstate.*
+crash.log
+.terraform.lock.hcl
+# Cles et secrets (NE JAMAIS COMMITER)
+*.pem
+# Ansible
+ansible/inventory.ini

@@ -1,0 +1,15 @@
+---
+# Exemple MINIMAL : installer et demarrer nginx. A ETENDRE.
+- name: Installer nginx
+  ansible.builtin.dnf:
+    name: nginx
+    state: present
+
+- name: Activer et demarrer nginx
+  ansible.builtin.service:
+    name: nginx
+    state: started
+    enabled: true
+  notify: Recharger nginx
+
+# >>> A COMPLETER : deployer votre application / page (template Jinja2), etc.

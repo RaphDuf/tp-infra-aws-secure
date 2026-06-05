@@ -1,0 +1,15 @@
+---
+# Squelette de playbook. A VOUS de definir les groupes et les roles.
+- name: Configurer et durcir les serveurs web
+  hosts: web
+  become: true
+  roles:
+    - webserver
+    # >>> A AJOUTER : un role "hardening" (SSH durci, pare-feu hote, MAJ auto)
+    #     Reprenez/adaptez ce que vous avez fait au TP4.
+
+- name: Deployer la supervision
+  hosts: supervision
+  become: true
+  # >>> A AJOUTER : un role "monitoring" (Prometheus/Grafana, Netdata, Zabbix... au choix)
+  roles: []

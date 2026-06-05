@@ -1,0 +1,11 @@
+# Inventaire genere par Terraform via templatefile(). Adaptez aux groupes de votre archi.
+[web]
+%{ for ip in web_ips ~}
+${ip}
+%{ endfor ~}
+
+[supervision]
+# >>> A COMPLETER : l'IP privee du serveur de supervision
+
+# Acces aux machines PRIVEES : passez par le bastion (ProxyJump).
+# >>> A COMPLETER : ansible_ssh_common_args = '-o ProxyJump=ec2-user@<IP_BASTION>'
