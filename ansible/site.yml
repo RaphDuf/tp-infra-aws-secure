@@ -1,15 +1,19 @@
 ---
-# Squelette de playbook. A VOUS de definir les groupes et les roles.
-- name: Configurer et durcir les serveurs web
+# =============================================================
+# Playbook principal — configure et durcit toute la flotte
+# Ordre : hardening d'abord, puis les services
+# =============================================================
+
+- name: Configurer et durcir le serveur web
   hosts: web
   become: true
   roles:
+    - hardening
     - webserver
-    # >>> A AJOUTER : un role "hardening" (SSH durci, pare-feu hote, MAJ auto)
-    #     Reprenez/adaptez ce que vous avez fait au TP4.
 
-- name: Deployer la supervision
-  hosts: supervision
+- name: Configurer et durcir le serveur FTP
+  hosts: ftp
   become: true
-  # >>> A AJOUTER : un role "monitoring" (Prometheus/Grafana, Netdata, Zabbix... au choix)
-  roles: []
+  roles:
+    - hardening
+    - ftpserver

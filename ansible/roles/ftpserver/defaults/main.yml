@@ -1,0 +1,4 @@
+---
+# Valeurs par défaut — à surcharger dans group_vars ou terraform.tfvars
+ftp_pasv_min: 50000
+ftp_pasv_max: 51000

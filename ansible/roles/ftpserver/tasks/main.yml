@@ -1,0 +1,107 @@
+---
+# =============================================================
+# ROLE ftpserver — installe et configure vsftpd
+# Serveur FTP privé, mode passif, utilisateur dédié
+# =============================================================
+
+# --- 1. Installation ---
+- name: Installer vsftpd
+  ansible.builtin.dnf:
+    name: vsftpd
+    state: present
+
+# --- 2. Utilisateur FTP dédié ---
+# On crée un utilisateur système sans shell interactif.
+# Justification : un utilisateur sans shell ne peut pas se
+# connecter en SSH même s'il connaît le mot de passe.
+- name: Créer le groupe ftpgroup
+  ansible.builtin.group:
+    name: ftpgroup
+    state: present
+
+- name: Créer l'utilisateur ftpuser (sans shell interactif)
+  ansible.builtin.user:
+    name: ftpuser
+    group: ftpgroup
+    shell: /sbin/nologin
+    create_home: false
+    state: present
+
+- name: Définir le mot de passe de ftpuser
+  ansible.builtin.user:
+    name: ftpuser
+    password: "{{ ftp_password | password_hash('sha512') }}"
+
+# --- 3. Dossier partagé ---
+- name: Créer le répertoire racine FTP
+  ansible.builtin.file:
+    path: /srv/ftp
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Créer le dossier partagé (accessible à ftpuser)
+  ansible.builtin.file:
+    path: /srv/ftp/share
+    state: directory
+    owner: ftpuser
+    group: ftpgroup
+    mode: "0750"
+
+- name: Déposer un fichier de test dans le partage
+  ansible.builtin.copy:
+    dest: /srv/ftp/share/bienvenue.txt
+    content: |
+      Serveur FTP opérationnel.
+      Projet DevSecOps — Mastère Cybersécurité 4A
+    owner: ftpuser
+    group: ftpgroup
+    mode: "0640"
+
+# --- 4. Configuration vsftpd ---
+- name: Déployer la configuration vsftpd
+  ansible.builtin.template:
+    src: vsftpd.conf.j2
+    dest: /etc/vsftpd/vsftpd.conf
+    owner: root
+    group: root
+    mode: "0600"
+  notify: restart vsftpd
+
+# --- 5. Liste blanche des utilisateurs autorisés ---
+# vsftpd refuse par défaut tout utilisateur non listé
+# dans userlist quand userlist_deny=NO
+- name: Créer la userlist vsftpd
+  ansible.builtin.copy:
+    dest: /etc/vsftpd/user_list
+    content: |
+      ftpuser
+    owner: root
+    group: root
+    mode: "0600"
+  notify: restart vsftpd
+
+# --- 6. Firewall hôte ---
+- name: Ouvrir le port FTP 21 dans firewalld
+  ansible.posix.firewalld:
+    port: 21/tcp
+    zone: public
+    state: enabled
+    permanent: true
+    immediate: true
+
+- name: Ouvrir la plage passive FTP dans firewalld
+  ansible.posix.firewalld:
+    port: 50000-51000/tcp
+    zone: public
+    state: enabled
+    permanent: true
+    immediate: true
+
+# --- 7. Activer et démarrer vsftpd ---
+- name: Activer et démarrer vsftpd
+  ansible.builtin.systemd:
+    name: vsftpd
+    enabled: true
+    state: started

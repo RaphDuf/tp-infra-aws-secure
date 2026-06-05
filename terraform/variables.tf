@@ -7,7 +7,7 @@ variable "region" {
 variable "project" {
   description = "Prefixe de nommage des ressources"
   type        = string
-  default     = "nimbus"
+  default     = "TP_G6"
 }
 
 variable "my_ip" {
