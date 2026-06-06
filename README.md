@@ -59,8 +59,8 @@ projet-final/
   ```
   Renseignez-la dans `terraform/terraform.tfvars` :
   ```hcl
-  admin_ip = "X.X.X.X"   # votre IP sans /32
-  project  = "devsecops"
+  admin_ip = "X.X.X.X/32"   # votre IP avec /32
+  project  = "tp-finale"
   ```
 
 ### 3.2 Configuration Ansible
@@ -69,7 +69,7 @@ projet-final/
 - La clé privée SSH est créée par Terraform dans `terraform/tp-finale-key.pem`, puis copiée dans `ansible/tp-finale-key.pem` par `make deploy`.
 - Le mot de passe FTP est défini dans `ansible/group_vars/ftp.yml` :
   ```yaml
-  ftp_password: "Gr0upS1xFTP!"
+  ftp_password: "VotreMotDePasse"  # à définir avant le déploiement
   ```
 
 > **Attention secrets** : Le fichier `ansible/group_vars/ftp.yml` contient le mot de passe FTP en clair. Il est ainsi ajouté au `.gitignore`. Cela évite d'exposer les secrets dans l'historique Git. En production, on utiliserait Ansible Vault ou un gestionnaire de secrets (AWS Secrets Manager, HashiCorp Vault, etc.).
@@ -113,7 +113,7 @@ Terraform et Ansible sont **idempotents** : vous pouvez exécuter les mêmes com
 - **Terraform** : `terraform apply` détecte l'état actuel des ressources AWS. S'il n'y a pas de changement dans le code Terraform, aucune ressource n'est modifiée.
 - **Ansible** : Les playbooks Ansible déclarent l'état souhaité des serveurs. Si une tâche (ex: "Installer nginx") est déjà appliquée, elle ne s'exécute pas à nouveau.
 
-Cette propriété est très utile : vous pouvez relancer `make deploy` plusieurs fois si le déploiement échoue partiellement, sans duplicata de ressources. 
+Cette propriété est très utile : vous pouvez relancer `make deploy` plusieurs fois si le déploiement échoue partiellement, sans duplicata de ressources.
 
 ---
 
@@ -146,7 +146,6 @@ Choix économique justifié par les contraintes Academy : la NAT est facturée �
 
 **CIDRs non contigus (`10.0.1.x` vs `10.0.10.x`)**
 L'espacement entre les plages publique et privée rend les règles de firewall immédiatement lisibles : toute règle ciblant `10.0.10.0/24` désigne sans ambiguïté un subnet privé.
-
 
 ### 5.3 Sécurité (`modules/security`)
 
@@ -181,7 +180,6 @@ Les Security Groups sont *stateful* (la réponse rentre automatiquement si la re
 
 Les **ports éphémères (1024–65535) en entrée** sont nécessaires car la NACL étant stateless, les réponses aux requêtes `dnf update` sortantes reviennent sur un port aléatoire dans cette plage. Sans cette règle, les mises à jour échoueraient silencieusement.
 
-
 ### 5.4 Compute (`modules/compute`)
 
 Le module `terraform/modules/compute` crée les instances EC2 et la paire SSH utilisée par Ansible :
@@ -195,6 +193,30 @@ Le module `terraform/modules/compute` crée les instances EC2 et la paire SSH ut
 - `aws_instance.ftp` : serveur FTP privé dans le subnet privé B.
 
 Chaque instance utilise le profil IAM `LabInstanceProfile` imposé par AWS Academy. Le bastion et l'Ansible master ont des adresses publiques, alors que le web et le FTP restent accessibles uniquement via le bastion / tunnel SSH.
+
+**Bastion et Ansible master : machines séparées**
+Nous avons choisi deux machines distinctes plutôt qu'une seule combinée. Le bastion est le seul point d'entrée SSH exposé sur Internet — il n'exécute aucun outil de provisioning. L'Ansible master est isolé derrière le bastion : une compromission du bastion n'implique pas celle de l'orchestrateur. En production, cette séparation permettrait également d'appliquer des politiques IAM différentes sur chaque machine.
+
+### 5.5 Ansible & durcissement (`roles/hardening`)
+
+**Organisation des rôles**
+Le rôle `hardening` est appliqué systématiquement à tous les serveurs, avant les rôles métier (`webserver`, `ftpserver`). Cette approche garantit que chaque machine est durcie indépendamment du service qu'elle héberge, et que le durcissement ne peut pas être oublié sur un hôte.
+
+**Règles de durcissement retenues**
+
+| Règle | Directive sshd_config | Justification |
+|---|---|---|
+| Pas de connexion root | `PermitRootLogin no` | Accès root direct = aucune traçabilité individuelle |
+| Authentification par clé uniquement | `PasswordAuthentication no` | Les clés SSH sont résistantes au brute-force contrairement aux mots de passe |
+| Liste blanche SSH | `AllowUsers ec2-user` | Seul l'utilisateur de déploiement peut se connecter |
+| Désactivation X11 | `X11Forwarding no` | Surface d'attaque inutile sur un serveur headless |
+| Bannière de connexion | `Banner /etc/issue.net` | Avertissement légal que la session est surveillée |
+
+**Firewall hôte (`firewalld`)**
+`firewalld` est activé sur chaque serveur en complément des Security Groups AWS. Justification : défense en profondeur — si un Security Group est mal configuré (erreur humaine, mauvaise PR mergée), `firewalld` bloque quand même le trafic non autorisé au niveau de l'OS.
+
+**Mises à jour automatiques (`dnf-automatic`)**
+`dnf-automatic` est configuré en mode `upgrade_type = security` : seuls les patches de sécurité sont appliqués automatiquement chaque nuit. Les mises à jour fonctionnelles restent manuelles pour éviter les régressions de service. Une CVE critique publiée un week-end est ainsi patchée sans intervention humaine.
 
 ---
 
@@ -216,11 +238,34 @@ Chaque instance utilise le profil IAM `LabInstanceProfile` imposé par AWS Acade
 
 L'inventaire `ansible/inventory.ini` est généré automatiquement par Terraform depuis `ansible/inventory.tftpl`.
 
-Il contient les hôtes `bastion`, `web`, `ftp` et le groupe `private` pour la connexion via bastion.
+Il contient les hôtes `bastion`, `web`, `ftp` et le groupe `private` pour la connexion via bastion (`ProxyCommand`).
 
 ---
 
-## 7. Sorties Terraform
+## 7. Connexion aux serveurs
+
+Les IPs sont disponibles après `terraform apply` via `terraform output` ou affichées à la fin de `make deploy`.
+
+```bash
+# Bastion
+ssh -i ansible/tp-finale-key.pem ec2-user@<bastion_public_ip>
+
+# Serveur web via tunnel (puis dans un second terminal : curl http://localhost:8080)
+ssh -i ansible/tp-finale-key.pem \
+    -o ProxyCommand="ssh -i ansible/tp-finale-key.pem -o StrictHostKeyChecking=no -W %h:%p ec2-user@<bastion_public_ip>" \
+    -L 8080:localhost:80 \
+    ec2-user@<web_private_ip>
+
+# Serveur FTP via tunnel (puis dans un second terminal : ftp localhost 2121)
+ssh -i ansible/tp-finale-key.pem \
+    -o ProxyCommand="ssh -i ansible/tp-finale-key.pem -o StrictHostKeyChecking=no -W %h:%p ec2-user@<bastion_public_ip>" \
+    -L 2121:localhost:21 \
+    ec2-user@<ftp_private_ip>
+```
+
+---
+
+## 8. Sorties Terraform
 
 Terraform fournit les sorties suivantes :
 - `bastion_public_ip`
@@ -228,11 +273,10 @@ Terraform fournit les sorties suivantes :
 - `web_private_ip`
 - `ftp_private_ip`
 - `ssh_key_path`
-- commandes SSH recommandées pour se connecter au bastion et à l'Ansible master.
 
 ---
 
-## 8. Nettoyage
+## 9. Nettoyage
 
 ```bash
 make destroy
